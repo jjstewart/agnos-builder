@@ -95,7 +95,7 @@ permissions:
 jobs:
   build_kernel:
     name: Build Kernel
-    runs-on: ubuntu-latest  # Updated runner label
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
     - uses: actions/checkout@v4
@@ -150,7 +150,7 @@ jobs:
 
   build_system:
     name: Build System
-    runs-on: ubuntu-latest  # Updated runner label
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     needs: build_kernel
     steps:

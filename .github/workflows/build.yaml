@@ -16,177 +16,81 @@ permissions:
 jobs:
   build_kernel:
     name: Build Kernel
-    runs-on: namespace-profile-arm64-8x16-2004-caching
+    runs-on: ubuntu-latest  # Updated runner label
     timeout-minutes: 60
     steps:
-    - uses: actions/checkout@v4
-      with:
-        lfs: true
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
 
-    - name: Get commit message
-      run: |
-        echo 'LAST_COMMIT_MESSAGE<<EOF' >> $GITHUB_ENV
-        if [ "${{ github.event_name }}" == "push" ]; then
-          echo "${{ github.event.head_commit.message }}" >> $GITHUB_ENV
-        elif [ "${{ github.event_name }}" == "workflow_run" ]; then
-          echo "${{ github.event.workflow_run.head_commit.message }}" >> $GITHUB_ENV
-        elif [ "${{ github.event_name }}" == "pull_request" ]; then
-          echo "$(curl -s '${{ github.event.pull_request.commits_url }}' | jq -r '.[-1].commit.message')" >> $GITHUB_ENV
-        fi
-        echo 'EOF' >> $GITHUB_ENV
+      - name: Get commit message
+        run: |
+          echo 'LAST_COMMIT_MESSAGE<<EOF' >> $GITHUB_ENV
+          if [ "${{ github.event_name }}" == "push" ]; then
+            echo "${{ github.event.head_commit.message }}" >> $GITHUB_ENV
+          elif [ "${{ github.event_name }}" == "workflow_run" ]; then
+            echo "${{ github.event.workflow_run.head_commit.message }}" >> $GITHUB_ENV
+          elif [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "$(curl -s '${{ github.event.pull_request.commits_url }}' | jq -r '.[-1].commit.message')" >> $GITHUB_ENV
+          fi
+          echo 'EOF' >> $GITHUB_ENV
 
-    - name: Get kernel submodule ref
-      id: kernel-submodule
-      run: echo "ref=$(git ls-tree HEAD | awk '$4 == "agnos-kernel-sdm845"' | awk '{print $3}')" >> $GITHUB_OUTPUT
+      - name: Get kernel submodule ref
+        id: kernel-submodule
+        run: echo "ref=$(git ls-tree HEAD | awk '$4 == \"agnos-kernel-sdm845\"' | awk '{print $3}')" >> $GITHUB_OUTPUT
 
-    - name: Checkout agnos-kernel-sdm845
-      uses: actions/checkout@v4
-      with:
-        repository: commaai/agnos-kernel-sdm845
-        ref: ${{ steps.kernel-submodule.outputs.ref }}
-        path: agnos-kernel-sdm845
+      - name: Checkout agnos-kernel-sdm845
+        uses: actions/checkout@v4
+        with:
+          repository: commaai/agnos-kernel-sdm845
+          ref: ${{ steps.kernel-submodule.outputs.ref }}
+          path: agnos-kernel-sdm845
 
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@c92f40bee50034e84c763e33b317c77adaa81c92
-      with:
-        key: kernel-${{ steps.kernel-submodule.outputs.ref }}
-        restore-keys: kernel-
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@c92f40bee50034e84c763e33b317c77adaa81c92
+        with:
+          key: kernel-${{ steps.kernel-submodule.outputs.ref }}
+          restore-keys: kernel-
 
-    - name: Build kernel
-      run: ./build_kernel.sh
+      - name: Build kernel
+        run: ./build_kernel.sh
 
-    - name: Upload artifact boot.img
-      uses: actions/upload-artifact@v4
-      if: "contains(env.LAST_COMMIT_MESSAGE, '[upload]')"
-      with:
-        name: boot.img
-        path: output/boot.img
+      - name: Upload artifact boot.img
+        uses: actions/upload-artifact@v4
+        if: contains(env.LAST_COMMIT_MESSAGE, '[upload]')
+        with:
+          name: boot.img
+          path: output/boot.img
 
-    - name: Upload artifact kernel modules
-      uses: actions/upload-artifact@v4
-      if: "contains(env.LAST_COMMIT_MESSAGE, '[upload]')"
-      with:
-        name: kernel-modules
-        path: output/*.ko
+      - name: Upload artifact kernel modules
+        uses: actions/upload-artifact@v4
+        if: contains(env.LAST_COMMIT_MESSAGE, '[upload]')
+        with:
+          name: kernel-modules
+          path: output/*.ko
 
   build_system:
     name: Build System
-    runs-on: namespace-profile-arm64-8x16-2004-caching
+    runs-on: ubuntu-latest  # Updated runner label
     timeout-minutes: 60
     needs: build_kernel
     steps:
-    - uses: actions/checkout@v4
-      with:
-        lfs: truename: build
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
 
-on:
-  push:
-    branches: [ master ]
-  pull_request:
-  workflow_dispatch:
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@c92f40bee50034e84c763e33b317c77adaa81c92
+        with:
+          key: system-${{ steps.kernel-submodule.outputs.ref }}
+          restore-keys: system-
 
-concurrency:
-  group: ${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && github.run_id || github.head_ref || github.ref }}-${{ github.workflow }}-${{ github.event_name }}
-  cancel-in-progress: true
+      - name: Build system
+        run: ./build_system.sh
 
-permissions:
-  contents: read
-
-jobs:
-  build_kernel:
-    name: Build Kernel
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        lfs: true
-
-    - name: Get commit message
-      run: |
-        echo 'LAST_COMMIT_MESSAGE<<EOF' >> $GITHUB_ENV
-        if [ "${{ github.event_name }}" == "push" ]; then
-          echo "${{ github.event.head_commit.message }}" >> $GITHUB_ENV
-        elif [ "${{ github.event_name }}" == "workflow_run" ]; then
-          echo "${{ github.event.workflow_run.head_commit.message }}" >> $GITHUB_ENV
-        elif [ "${{ github.event_name }}" == "pull_request" ]; then
-          echo "$(curl -s '${{ github.event.pull_request.commits_url }}' | jq -r '.[-1].commit.message')" >> $GITHUB_ENV
-        fi
-        echo 'EOF' >> $GITHUB_ENV
-
-    - name: Get kernel submodule ref
-      id: kernel-submodule
-      run: echo "ref=$(git ls-tree HEAD | awk '$4 == "agnos-kernel-sdm845"' | awk '{print $3}')" >> $GITHUB_OUTPUT
-
-    - name: Checkout agnos-kernel-sdm845
-      uses: actions/checkout@v4
-      with:
-        repository: commaai/agnos-kernel-sdm845
-        ref: ${{ steps.kernel-submodule.outputs.ref }}
-        path: agnos-kernel-sdm845
-
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@c92f40bee50034e84c763e33b317c77adaa81c92
-      with:
-        key: kernel-${{ steps.kernel-submodule.outputs.ref }}
-        restore-keys: kernel-
-
-    - name: Build kernel
-      run: ./build_kernel.sh
-
-    - name: Upload artifact boot.img
-      uses: actions/upload-artifact@v4
-      if: "contains(env.LAST_COMMIT_MESSAGE, '[upload]')"
-      with:
-        name: boot.img
-        path: output/boot.img
-
-    - name: Upload artifact kernel modules
-      uses: actions/upload-artifact@v4
-      if: "contains(env.LAST_COMMIT_MESSAGE, '[upload]')"
-      with:
-        name: kernel-modules
-        path: output/*.ko
-
-  build_system:
-    name: Build System
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    needs: build_kernel
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        lfs: true
-
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@c92f40bee50034e84c763e33b317c77adaa81c92
-      with:
-        key: system-${{ steps.kernel-submodule.outputs.ref }}
-        restore-keys: system-
-
-    - name: Build system
-      run: ./build_system.sh
-
-    - name: Upload artifact system.img
-      uses: actions/upload-artifact@v4
-      if: "contains(env.LAST_COMMIT_MESSAGE, '[upload]')"
-      with:
-        name: system.img
-        path: output/system.img
-
-
-    - name: ccache
-      uses: hendrikmuhs/ccache-action@c92f40bee50034e84c763e33b317c77adaa81c92
-      with:
-        key: system-${{ steps.kernel-submodule.outputs.ref }}
-        restore-keys: system-
-
-    - name: Build system
-      run: ./build_system.sh
-
-    - name: Upload artifact system.img
-      uses: actions/upload-artifact@v4
-      if: "contains(env.LAST_COMMIT_MESSAGE, '[upload]')"
-      with:
-        name: system.img
-        path: output/system.img
+      - name: Upload artifact system.img
+        uses: actions/upload-artifact@v4
+        if: contains(env.LAST_COMMIT_MESSAGE, '[upload]')
+        with:
+          name: system.img
+          path: output/system.img
